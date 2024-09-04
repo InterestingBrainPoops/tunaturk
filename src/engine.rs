@@ -166,7 +166,7 @@ impl Engine {
         } else if let Some(nodes) = info.nodes {
             end_cond = EndCondition::Nodes(nodes as u64);
         } else if let Some(depth) = info.depth {
-            end_cond = EndCondition::Depth(depth as u8);
+            end_cond = EndCondition::Depth(depth as u8 + 1);
         } else if let Some(movetime) = info.movetime {
             end_cond = EndCondition::Time(t1 + Duration::from_millis(movetime.into()));
         } else if let (Some(btime), Some(wtime)) = (info.btime, info.wtime) {
@@ -197,16 +197,25 @@ impl Engine {
             panic!("No end condition findable!");
         }
         self.search_stack = vec![Default::default(); 16];
-        let (out, score) = self.negamax(&self.board.clone(), &end_cond, 3);
+        let mut depth = 1;
+        let mut best_move = None;
+        while !end_cond.met(self.search_info.nodes, depth) {
+            let (out, score) = self.negamax(&self.board.clone(), &end_cond, depth);
+            if end_cond.met(self.search_info.nodes, depth) || self.shared.lock().unwrap().stop {
+                break;
+            }
+            best_move = out;
+            let time = t1.elapsed().as_millis();
 
-        let time = t1.elapsed().as_millis();
-        let nps = self.search_info.nodes * 1000 / (time as u64 + 1);
-        println!(
-            "info nodes {} time {} score {} nps {}",
-            self.search_info.nodes, time, score, nps,
-        );
+            let nps = self.search_info.nodes * 1000 / (time as u64 + 1);
+            println!(
+                "info depth {} nodes {} time {} score {} nps {}",
+                depth, self.search_info.nodes, time, score, nps,
+            );
+            depth += 1;
+        }
 
-        return out.unwrap();
+        return best_move.unwrap();
     }
 
     fn negamax(
@@ -215,8 +224,8 @@ impl Engine {
         end_condition: &EndCondition,
         depth: u8,
     ) -> (Option<Move>, i32) {
-        // end_condition.met(self.search_info.nodes, 0) ||
-        if self.shared.lock().unwrap().stop {
+        //
+        if end_condition.met(self.search_info.nodes, 0) || self.shared.lock().unwrap().stop {
             return (None, 0);
         }
         let cur_hash = board.hash();
@@ -241,7 +250,7 @@ impl Engine {
             return (None, 0); // detect repeated position in current search line, return draw if found
         }
 
-        let mut max_score = -1000;
+        let mut max_score = -5000;
         let mut best_move = None;
         let mut moves = vec![];
         board.generate_moves(|mves| {

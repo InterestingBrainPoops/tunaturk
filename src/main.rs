@@ -24,7 +24,7 @@ fn main() {
         }
     }
 
-    println!("id name tunaturk");
+    println!("id name tunaturk0.2");
     println!("id author BrokenKeyboard");
 
     println!("uciok");
